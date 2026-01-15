@@ -113,10 +113,6 @@ export default function ScanPage() {
         const userName = localStorage.getItem("user_name") || "Unknown User";
         const deviceUuid = localStorage.getItem("device_owner_tc") || "unknown-device";
 
-        // Only use mock mode if API URL is not configured
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-        const useMockMode = !apiUrl;
-
         try {
             // Prepare Request Payload
             const payload = {
@@ -133,21 +129,14 @@ export default function ScanPage() {
 
             console.log("📡 Payload:", payload);
 
-            if (useMockMode) {
-                // MOCK MODE: Simulate successful response
-                console.log("🔧 MOCK MODE: Simulating successful response (Backend not ready)");
-                await new Promise(r => setTimeout(r, 1500)); // Simulate network delay
+            // REAL API CALL - NO MOCK MODE
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-                setStatus("success");
-                setTimeout(() => router.push("/dashboard"), 3000);
-                return;
+            if (!apiUrl) {
+                throw new Error("API URL yapılandırılmamış. Lütfen .env.local dosyasını kontrol edin.");
             }
 
-            // REAL API CALL (Production Mode)
-            const fullApiUrl = apiUrl
-                ? `${apiUrl}/api/mobile/scan`
-                : "https://api.fokusistatistik.com/api/mobile/scan";
-
+            const fullApiUrl = `${apiUrl}/api/mobile/scan`;
             console.log("📡 Sending Request to:", fullApiUrl);
 
             const response = await fetch(fullApiUrl, {
@@ -161,11 +150,16 @@ export default function ScanPage() {
 
             const data = await response.json().catch(() => ({}));
 
-            // Handle Specific HTTP Status Codes
+            // Handle Specific HTTP Status Codes - STRICT VALIDATION
             switch (response.status) {
                 case 200:
-                    setStatus("success");
-                    setTimeout(() => router.push("/dashboard"), 3000);
+                    // ✅ ONLY show success if backend explicitly approved
+                    if (data.success === true) {
+                        setStatus("success");
+                        setTimeout(() => router.push("/dashboard"), 3000);
+                    } else {
+                        throw new Error(data.message || "Backend onayı alınamadı");
+                    }
                     break;
 
                 case 404:
@@ -190,15 +184,15 @@ export default function ScanPage() {
         } catch (error: any) {
             console.error("❌ Access Error:", error);
 
-            // If fetch failed and we're in dev, fall back to mock
-            if (useMockMode || error.name === "TypeError") {
-                console.log("⚠️ Falling back to MOCK mode due to connection error");
-                setStatus("success");
-                setTimeout(() => router.push("/dashboard"), 3000);
+            // NO FALLBACK - Show error to user
+            if (error.name === "AbortError") {
+                setErrorMessage("Sunucu yanıt vermiyor (Zaman Aşımı). Lütfen tekrar deneyin.");
+            } else if (error.message.includes("Failed to fetch")) {
+                setErrorMessage("Backend'e bağlanılamıyor. Lütfen API URL'ini kontrol edin.");
             } else {
-                setErrorMessage(error.message || "Bağlantı hatası. Lütfen internetinizi kontrol edin.");
-                setStatus("error");
+                setErrorMessage(error.message || "Bağlantı hatası. Lütfen sistem yöneticisi ile iletişime geçin.");
             }
+            setStatus("error");
         }
     };
 
