@@ -51,6 +51,12 @@ export default function InstallPrompt() {
         }
     };
 
+    const handleOpenApp = () => {
+        // Attempt to open PWA via intent or new window
+        // On Android, navigating to the manifest start_url might trigger the Intent Picker if installed
+        window.location.href = "/dashboard";
+    };
+
     if (isStandalone) return null;
 
     return (
@@ -71,42 +77,59 @@ export default function InstallPrompt() {
                     />
                 </div>
 
-                <h1 className="text-3xl font-bold text-white mb-4">Uygulamayı Yükle</h1>
+                <h1 className="text-3xl font-bold text-white mb-4">DOKU'ya Geçiş Yapın</h1>
                 <p className="text-neutral-400 mb-10 leading-relaxed">
-                    DOKU erişim sistemini kullanmak için lütfen uygulamayı ana ekranınıza ekleyin.
+                    Sisteme erişmek için mobil uygulamayı kullanmanız gerekmektedir.
                 </p>
 
-                {!isIOS ? (
-                    <button
-                        onClick={handleInstallClick}
-                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-3 animate-pulse"
-                    >
-                        <Download size={24} />
-                        Uygulamayı Yükle
-                    </button>
-                ) : (
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-left space-y-4">
-                        <div className="flex items-start gap-4">
-                            <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
-                                <Share size={24} />
+                <div className="space-y-4">
+                    {/* Install Button - Show if browser supports programmatic install */}
+                    {!isIOS && deferredPrompt && (
+                        <button
+                            onClick={handleInstallClick}
+                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-3 animate-pulse"
+                        >
+                            <Download size={24} />
+                            Uygulamayı Yükle
+                        </button>
+                    )}
+
+                    {/* iOS Instructions */}
+                    {isIOS && (
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-left space-y-4">
+                            <div className="flex items-start gap-4">
+                                <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
+                                    <Share size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-white font-medium">1. "Paylaş" butonuna basın</p>
+                                    <p className="text-xs text-neutral-500">Tarayıcının alt menüsünde bulunur.</p>
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-white font-medium">1. "Paylaş" butonuna basın</p>
-                                <p className="text-xs text-neutral-500">Tarayıcının alt menüsünde bulunur.</p>
+                            <div className="w-full h-px bg-white/5" />
+                            <div className="flex items-start gap-4">
+                                <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
+                                    <PlusSquare size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-white font-medium">2. "Ana Ekrana Ekle"yi seçin</p>
+                                    <p className="text-xs text-neutral-500">Menüyü yukarı kaydırarak bulabilirsiniz.</p>
+                                </div>
                             </div>
                         </div>
-                        <div className="w-full h-px bg-white/5" />
-                        <div className="flex items-start gap-4">
-                            <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
-                                <PlusSquare size={24} />
-                            </div>
-                            <div>
-                                <p className="text-white font-medium">2. "Ana Ekrana Ekle"yi seçin</p>
-                                <p className="text-xs text-neutral-500">Menüyü yukarı kaydırarak bulabilirsiniz.</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                    )}
+
+                    {/* Open App / Alternative - Show if we suspect it's installed or prompt is missing */}
+                    {(!deferredPrompt && !isIOS) && (
+                        <button
+                            onClick={handleOpenApp}
+                            className="w-full bg-neutral-800 hover:bg-neutral-700 text-white font-bold py-4 rounded-xl border border-white/10 active:scale-95 transition-all flex items-center justify-center gap-3"
+                        >
+                            <Share size={24} className="rotate-90" />
+                            Zaten Yüklü mü? Uygulamayı Aç
+                        </button>
+                    )}
+                </div>
             </motion.div>
         </div>
     );
