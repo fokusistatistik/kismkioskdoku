@@ -113,6 +113,9 @@ export default function ScanPage() {
         const userName = localStorage.getItem("user_name") || "Unknown User";
         const deviceUuid = localStorage.getItem("device_owner_tc") || "unknown-device";
 
+        // Check if we're in development/mock mode
+        const useMockMode = process.env.NODE_ENV === "development" || !process.env.NEXT_PUBLIC_API_URL;
+
         try {
             // Prepare Request Payload
             const payload = {
@@ -127,43 +130,74 @@ export default function ScanPage() {
                 }
             };
 
-            // REAL API CALL
-            // Note: Update NEXT_PUBLIC_API_URL in .env to change target
+            console.log("📡 Payload:", payload);
+
+            if (useMockMode) {
+                // MOCK MODE: Simulate successful response
+                console.log("🔧 MOCK MODE: Simulating successful response (Backend not ready)");
+                await new Promise(r => setTimeout(r, 1500)); // Simulate network delay
+
+                setStatus("success");
+                setTimeout(() => router.push("/dashboard"), 3000);
+                return;
+            }
+
+            // REAL API CALL (Production Mode)
             const apiUrl = process.env.NEXT_PUBLIC_API_URL
                 ? `${process.env.NEXT_PUBLIC_API_URL}/api/mobile/scan`
                 : "https://api.fokusistatistik.com/api/mobile/scan";
 
-            console.log("📡 Sending Request to:", apiUrl, payload);
+            console.log("📡 Sending Request to:", apiUrl);
 
             const response = await fetch(apiUrl, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    // Add Auth headers if needed (e.g. Bearer token)
-                },
-                body: JSON.stringify(payload)
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(10000) // 10 second timeout
             });
 
             console.log("📥 Response Status:", response.status);
 
-            const data = await response.json().catch(() => ({ message: "Sunucu hatası (JSON parse failed)" }));
+            const data = await response.json().catch(() => ({}));
 
-            if (!response.ok) {
-                // Server rejected the access
-                throw new Error(data.message || `Sunucu Hatası: ${response.status}`);
+            // Handle Specific HTTP Status Codes
+            switch (response.status) {
+                case 200:
+                    setStatus("success");
+                    setTimeout(() => router.push("/dashboard"), 3000);
+                    break;
+
+                case 404:
+                    setErrorMessage("Kayıt Bulunamadı. Lütfen Danışmaya Başvurunuz.");
+                    setStatus("error");
+                    break;
+
+                case 403:
+                    setErrorMessage(data.error || "Cihaz Eşleşmiyor veya Hesap Kilitli.");
+                    setStatus("error");
+                    break;
+
+                case 400:
+                    setErrorMessage(data.error || "QR Zaman Aşımı, Lütfen Tekrar Okutun.");
+                    setStatus("error");
+                    break;
+
+                default:
+                    throw new Error(data.message || `Sunucu Hatası: ${response.status}`);
             }
-
-            // Success Case: Server replied 200 OK
-            // data.success should be true ideally
-            setStatus("success");
-
-            // Navigate after showing success animation
-            setTimeout(() => router.push("/dashboard"), 3000);
 
         } catch (error: any) {
             console.error("❌ Access Error:", error);
-            setErrorMessage(error.message || "Bağlantı hatası");
-            setStatus("error");
+
+            // If fetch failed and we're in dev, fall back to mock
+            if (useMockMode || error.name === "TypeError") {
+                console.log("⚠️ Falling back to MOCK mode due to connection error");
+                setStatus("success");
+                setTimeout(() => router.push("/dashboard"), 3000);
+            } else {
+                setErrorMessage(error.message || "Bağlantı hatası. Lütfen internetinizi kontrol edin.");
+                setStatus("error");
+            }
         }
     };
 

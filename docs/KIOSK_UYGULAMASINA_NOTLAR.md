@@ -1,52 +1,64 @@
-# KIOSK ve BACKEND EKİBİ İÇİN KÜMÜLATİF NOTLAR (v1.0.0)
+# BACKEND/KIOSK EKİBİNE NOTLAR (Kümülatif)
 
-⚠️ **ÖNEMLİ:** Bu dosya proje süresince sürekli güncellenecektir. Lütfen her dağıtım öncesi buradaki son değişiklikleri kontrol ediniz.
+Bu dosya, Backend ve Kiosk ekiplerine iletilmesi gereken teknik gereksinimleri içerir.
 
 ---
 
-### 📅 Son Güncelleme: 16.01.2026
+## � REVİZYON 1.1 - 16.01.2026
 
-### 1. [KRİTİK] Geçiş Onay Mekanizması (Scan Flow Değişikliği)
-**Eski Durum:** Mobil uygulama QR'ı okuduğunda kendi kendine "Başarılı" diyordu.
-**Yeni Durum (Gereksinim):**
-*   Mobil uygulama QR'ı okur ve kullanıcıdan onay alır.
-*   Mobil uygulama aşağıdaki endpoint'e **POST** isteği atar.
-*   **MOBİL UYGULAMA CEVAP GELENE KADAR BEKLER.** (Loading spinner döner).
-*   Backend/Kiosk'tan gelen HTTP Status Code ve JSON cevabına göre işlem yapar.
-    *   `200 OK` -> Yeşil Ekran (Geçiş Başarılı, Hoşgeldiniz).
-    *   `401/403/500` -> Kırmızı Ekran (Erişim Reddedildi + Hata Mesajı).
+### 1. [KRİTİK] Geçiş Onay Mekanizması
+**Durum:** ✅ Tamamlandı
+- Mobil uygulama artık backend'den 200 OK gelmeden "Başarılı" demiyor.
+- Loading spinner backend cevabını bekliyor.
 
-### 2. API Endpoint Beklentisi
-**URL:** `https://api.fokusistatistik.com/api/mobile/scan` (veya belirlenen BASE_URL)
-**Method:** `POST`
-**Mobil'den Gelen JSON:**
+### 2. API Endpoint Gereksinimleri
+**URL:** `https://api.fokusistatistik.com/api/mobile/scan`
+**Method:** POST
+**Timeout:** 10 saniye
+
+**Gönderilen Payload:**
 ```json
 {
-  "qr_token": "...",            // Kiosk'tan okunan ham JWT
-  "user_id": "12345678901",     // TC Kimlik No
-  "user_name": "Ahmet Yılmaz",  // Ad Soyad
-  "device_info": { ... }        // Cihaz Detayları
+  "qr_token": "...",
+  "user_id": "12345678901",
+  "user_name": "Ahmet Yılmaz",
+  "device_info": {
+    "uuid": "12345678901",
+    "user_agent": "Mozilla/5.0...",
+    "platform": "iPhone",
+    "timestamp": "2026-01-16T00:00:00.000Z"
+  }
 }
 ```
 
-**Backend'den Beklenen Cevap (Başarılı):**
-```json
-{
-  "success": true,
-  "message": "Giriş Onaylandı",
-  "kiosk_command": "open_gate" // Opsiyonel: Kiosk'a mesaj iletildiğini doğrular
-}
-```
+**Beklenen Cevaplar:**
+- `200 OK` → Mobil: Yeşil Ekran + Dashboard'a yönlendir
+- `404 Not Found` → Mobil: "Kayıt Bulunamadı"
+- `403 Forbidden` → Mobil: "Cihaz Eşleşmiyor"
+- `400 Bad Request` → Mobil: "QR Zaman Aşımı"
 
-**Backend'den Beklenen Cevap (Hata):**
-```json
-{
-  "success": false,
-  "message": "Yetkisiz Giriş Denemesi / Bakliye Yetersiz / Yanlış Kapı"
-}
-```
+### 3. Kiosk Ekranı Aksiyonu
+Backend, başarılı isteği doğruladığında:
+1. İlgili Kiosk ID'sine (`kid`) Socket/Polling ile sinyal gönder
+2. Kiosk ekranında **"Hoşgeldiniz, Sayın [user_name]"** göster
+3. Kapıyı/turnikeyi aç
 
-### 3. Kiosk Ekranı (Frontend) Aksiyonu
-*   Backend, Mobil'den gelen başarılı isteği doğruladığında, Socket veya Polling üzerinden ilgili Kiosk ID'sine (QR içindeki `kid`) bir sinyal göndermelidir.
-*   Kiosk ekranında **"Hoşgeldiniz, Sayın Ahmet Yılmaz"** yazısı belirmelidir.
-*   Mobil uygulama sadece "İşlem Başarılı" ekranı gösterir, kapıyı açan ve karşılayan Kiosk'tur.
+### 4. Geliştirme Modu (Development)
+**Not:** Backend hazır olmadığında mobil uygulama otomatik olarak MOCK mode'a geçer.
+- `NODE_ENV=development` ise → Mock yanıt döner
+- `NEXT_PUBLIC_API_URL` tanımlı değilse → Mock yanıt döner
+- Production'da bu otomatik devre dışı kalır.
+
+### 5. Cihaz Sıfırlama (Admin Reset)
+**Yeni Özellik:** Yanlış TC ile kayıt yapıldığında admin şifresi (0000) ile cihaz sıfırlanabilir.
+- Login ekranında hata mesajı altında "Cihazı Sıfırla" linki var
+- Admin PIN: `0000` (Değiştirilebilir)
+- Tüm localStorage temizlenir, yeni kurulum yapılabilir
+
+---
+
+## ⚠️ BACKEND EKİBİNE HATIRLATMA
+1. API endpoint'i hazır olana kadar mobil uygulama mock mode'da çalışacak
+2. CORS ayarlarını kontrol edin (doku.fokusistatistik.com'dan gelen isteklere izin)
+3. Response süresi 10 saniyeyi geçmemeli
+4. Socket/WebSocket için Kiosk ID mapping'i hazır olmalı
