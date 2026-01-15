@@ -109,44 +109,60 @@ export default function ScanPage() {
         if (!scannedData) return;
         setStatus("loading");
 
-        const userId = localStorage.getItem("user_id") || "unknown"; // TC
+        const userId = localStorage.getItem("user_id") || "unknown";
         const userName = localStorage.getItem("user_name") || "Unknown User";
+        const deviceUuid = localStorage.getItem("device_owner_tc") || "unknown-device";
 
         try {
-            // Mock API Call: POST [API_URL]/api/mobile/scan
-            // Body: { qr_token, user_id, device_uuid }
-            // Enhance Device Info if possible (User Agent/Platform)
-            // Note: True Device UUID is hard in web, usually generated and stored in localStorage
-            const userAgent = window.navigator.userAgent;
-            const platform = (window.navigator as any).userAgentData?.platform || window.navigator.platform;
-
-            console.log("Sending Access Request:", {
+            // Prepare Request Payload
+            const payload = {
                 qr_token: scannedData.raw,
                 user_id: userId,
-                user_name: userName, // Added Name
+                user_name: userName,
                 device_info: {
-                    uuid: localStorage.getItem("device_owner_tc") || "device-uuid-mock", // Use TC as device binder
-                    user_agent: userAgent,
-                    platform: platform,
+                    uuid: deviceUuid,
+                    user_agent: window.navigator.userAgent,
+                    platform: (window.navigator as any).userAgentData?.platform || window.navigator.platform,
                     timestamp: new Date().toISOString()
                 }
+            };
+
+            // REAL API CALL
+            // Note: Update NEXT_PUBLIC_API_URL in .env to change target
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL
+                ? `${process.env.NEXT_PUBLIC_API_URL}/api/mobile/scan`
+                : "https://api.fokusistatistik.com/api/mobile/scan";
+
+            console.log("📡 Sending Request to:", apiUrl, payload);
+
+            const response = await fetch(apiUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    // Add Auth headers if needed (e.g. Bearer token)
+                },
+                body: JSON.stringify(payload)
             });
 
-            // Simulate Network Delay
-            await new Promise(r => setTimeout(r, 1500));
+            console.log("📥 Response Status:", response.status);
 
-            // Mock Success only for demo. 
-            // In real app, check response.ok
-            const isSuccess = true;
+            const data = await response.json().catch(() => ({ message: "Sunucu hatası (JSON parse failed)" }));
 
-            if (isSuccess) {
-                setStatus("success");
-                setTimeout(() => router.push("/dashboard"), 2500);
-            } else {
-                throw new Error("Access Denied by Server");
+            if (!response.ok) {
+                // Server rejected the access
+                throw new Error(data.message || `Sunucu Hatası: ${response.status}`);
             }
+
+            // Success Case: Server replied 200 OK
+            // data.success should be true ideally
+            setStatus("success");
+
+            // Navigate after showing success animation
+            setTimeout(() => router.push("/dashboard"), 3000);
+
         } catch (error: any) {
-            setErrorMessage(error.message || "Unknown error");
+            console.error("❌ Access Error:", error);
+            setErrorMessage(error.message || "Bağlantı hatası");
             setStatus("error");
         }
     };
