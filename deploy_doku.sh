@@ -33,7 +33,10 @@ cat > .env.local << 'EOF'
 NODE_ENV=production
 PORT=3010
 
-# Main URLs
+# API Configuration (Backend URL)
+NEXT_PUBLIC_API_URL=http://localhost:3000
+
+# App URL
 NEXT_PUBLIC_APP_URL=https://doku.fokusistatistik.com
 EOF
 
