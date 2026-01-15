@@ -13,6 +13,7 @@ interface JWTPayload {
     nam: string; // Kiosk Name
     loc: string;
     iat: number;
+    // ... other standard claims
 }
 
 export default function ScanPage() {
@@ -86,7 +87,11 @@ export default function ScanPage() {
 
     const handleScan = (rawJwt: string) => {
         try {
-            stopScanner(); // Pause scanning logic
+            // STOP FIRST: This prevents double scans immediately
+            if (scannerRef.current && scannerRef.current.isScanning) {
+                scannerRef.current.pause(true); // Pause instead of stop to keep video feed (prevents black screen)
+            }
+
             const decoded = jwtDecode<JWTPayload>(rawJwt);
             // Basic validation
             if (!decoded.nam) throw new Error("Invalid QR Code Structure");
@@ -96,6 +101,7 @@ export default function ScanPage() {
         } catch (e) {
             console.error("Invalid JWT", e);
             // Optionally show toast 'Invalid QR', but for now assume good QR
+            if (scannerRef.current) scannerRef.current.resume();
         }
     };
 
@@ -103,7 +109,8 @@ export default function ScanPage() {
         if (!scannedData) return;
         setStatus("loading");
 
-        const userId = localStorage.getItem("user_uuid");
+        const userId = localStorage.getItem("user_id") || "unknown"; // TC
+        const userName = localStorage.getItem("user_name") || "Unknown User";
 
         try {
             // Mock API Call: POST [API_URL]/api/mobile/scan
@@ -116,8 +123,9 @@ export default function ScanPage() {
             console.log("Sending Access Request:", {
                 qr_token: scannedData.raw,
                 user_id: userId,
+                user_name: userName, // Added Name
                 device_info: {
-                    uuid: "device-uuid-mock", // In real app, generate once and store
+                    uuid: localStorage.getItem("device_owner_tc") || "device-uuid-mock", // Use TC as device binder
                     user_agent: userAgent,
                     platform: platform,
                     timestamp: new Date().toISOString()
@@ -146,7 +154,17 @@ export default function ScanPage() {
     const resetScan = () => {
         setScannedData(null);
         setErrorMessage("");
-        setStatus("idle"); // This triggers useEffect to restart scanner
+        setStatus("idle");
+        // Resume scanner if paused
+        if (scannerRef.current) {
+            try {
+                scannerRef.current.resume();
+            } catch (e) {
+                // If failed to resume (maybe stopped?), force restart via effect
+                setMounted(false);
+                setTimeout(() => setMounted(true), 10);
+            }
+        }
     };
 
     return (
@@ -198,6 +216,10 @@ export default function ScanPage() {
                         className="absolute bottom-0 left-0 right-0 bg-neutral-900 rounded-t-3xl p-8 z-20 border-t border-white/10 shadow-2xl pb-10"
                     >
                         <div className="w-16 h-1.5 bg-neutral-700/50 rounded-full mx-auto mb-8" />
+
+                        <div className="absolute top-4 right-4 bg-green-500/20 text-green-400 text-xs font-bold px-3 py-1 rounded-full animate-pulse border border-green-500/30">
+                            ✓ QR Okundu
+                        </div>
 
                         <div className="mb-8">
                             <h3 className="text-sm text-neutral-400 font-medium uppercase tracking-wider mb-2">Giriş Yapılacak Nokta:</h3>

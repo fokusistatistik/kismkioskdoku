@@ -11,6 +11,7 @@ export default function LoginPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [tc, setTc] = useState("");
+    const [fullName, setFullName] = useState("");
     const [error, setError] = useState("");
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -18,9 +19,15 @@ export default function LoginPage() {
         setLoading(true);
         setError("");
 
-        // Basic TC Validation (11 digits)
+        // Basic Validations
         if (!/^\d{11}$/.test(tc)) {
             setError("Geçersiz TC Kimlik Numarası");
+            setLoading(false);
+            return;
+        }
+
+        if (fullName.trim().length < 3) {
+            setError("Lütfen geçerli bir Ad Soyad giriniz");
             setLoading(false);
             return;
         }
@@ -43,7 +50,8 @@ export default function LoginPage() {
 
                 // Set Session
                 localStorage.setItem("user_uuid", "mock-uuid-" + Math.random().toString(36).substr(2, 9));
-                localStorage.setItem("user_name", "Kullanıcı " + tc.substring(0, 3)); // Mock Name
+                localStorage.setItem("user_id", tc); // Send TC as user_id for identification
+                localStorage.setItem("user_name", fullName); // Store real name
                 localStorage.setItem("user_title", "Personel");
 
                 router.push("/dashboard");
@@ -81,6 +89,18 @@ export default function LoginPage() {
                     </div>
 
                     <div className="space-y-4">
+                        <div>
+                            <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider ml-1">Ad Soyad</label>
+                            <input
+                                type="text"
+                                required
+                                className="w-full mt-2 bg-neutral-900/50 border border-neutral-700/50 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium"
+                                placeholder="Örn: Ahmet Yılmaz"
+                                value={fullName}
+                                onChange={(e) => setFullName(e.target.value)}
+                            />
+                        </div>
+
                         <div>
                             <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider ml-1">TC Kimlik No</label>
                             <input

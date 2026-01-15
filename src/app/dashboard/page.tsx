@@ -29,7 +29,7 @@ export default function Dashboard() {
                         <UserCircle className="w-8 h-8 text-neutral-400" />
                     </div>
                     <div>
-                        <h2 className="font-bold text-white leading-tight text-lg">{user.name}</h2>
+                        <h2 className="font-bold text-white leading-tight text-lg">Sn. {user.name}</h2>
                         <p className="text-xs text-blue-400 font-medium uppercase tracking-wide">{user.title}</p>
                     </div>
                 </div>
