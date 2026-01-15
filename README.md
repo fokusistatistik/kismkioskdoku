@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DOKU Mobil PWA - README
 
-## Getting Started
+## 📱 Proje Hakkında
+DOKU (Dijital Otomasyon Kontrol Uygulaması), tesis erişim kontrolü için geliştirilmiş bir Progressive Web App (PWA) uygulamasıdır. Kiosk cihazlarından okutulan QR kodları ile personel geçiş kontrolü sağlar.
 
-First, run the development server:
+## 🚀 Hızlı Başlangıç
 
+### Gereksinimler
+- Node.js 18+
+- npm veya yarn
+
+### Kurulum
 ```bash
+# Bağımlılıkları yükle
+npm install
+
+# Geliştirme sunucusunu başlat
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Production build
+npm run build
+npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Ortam Değişkenleri
+`.env.local` dosyası oluşturun:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Backend API URL (Geliştirme için yerel IP kullanın)
+NEXT_PUBLIC_API_URL=http://192.168.1.5:3000
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Uygulama URL
+NEXT_PUBLIC_APP_URL=https://doku.fokusistatistik.com
+```
 
-## Learn More
+**Not:** Telefonda test için `localhost` yerine bilgisayarınızın yerel IP adresini kullanın.
 
-To learn more about Next.js, take a look at the following resources:
+## 📚 Dokümantasyon
+- [Teknik Şartname](docs/DOKU_TEKNIK_SARTNAME.md)
+- [Kiosk Entegrasyon Rehberi](docs/KIOSK_ENTEGRASYON_REHBERI.md)
+- [Backend Bağlantı Rehberi](docs/BACKEND_BAGLANTI_REHBERI.md)
+- [Kiosk Ekibine Notlar](docs/KIOSK_UYGULAMASINA_NOTLAR.md)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🔧 Özellikler
+- ✅ PWA Desteği (Offline çalışma)
+- ✅ Cihaz Kilitleme (TC bazlı)
+- ✅ QR Kod Tarama
+- ✅ Gerçek Zamanlı Backend İletişimi
+- ✅ Admin Reset (PIN: 0000)
+- ✅ Responsive Tasarım
+- ✅ Dark Mode
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🏗️ Teknoloji Yığını
+- **Framework:** Next.js 16 (App Router)
+- **Dil:** TypeScript
+- **Stil:** Tailwind CSS v3
+- **PWA:** @ducanh2912/next-pwa
+- **QR Tarama:** html5-qrcode
+- **Animasyon:** Framer Motion
 
-## Deploy on Vercel
+## 📦 Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Sunucuya Yükleme
+```bash
+# Deploy scriptini çalıştır
+chmod +x deploy_doku.sh
+./deploy_doku.sh
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Script otomatik olarak:
+1. Eski sürümü temizler
+2. GitHub'dan son kodu çeker
+3. Bağımlılıkları yükler
+4. Production build alır
+5. PM2 ile başlatır
+6. Nginx ayarlarını günceller
+
+### Manuel Deployment
+```bash
+# Build
+npm run build
+
+# PM2 ile başlat
+pm2 start npm --name "doku" -- start -- -p 3010
+pm2 save
+```
+
+## 🧪 Test Kullanıcıları
+- **TC:** 17422776208 (Şifre: 1742)
+- **TC:** 24400543608 (Şifre: 2440)
+
+## 🔐 Güvenlik
+- Cihaz başına tek kullanıcı (Device Binding)
+- Admin PIN korumalı reset (0000)
+- HTTPS zorunlu (PWA gereksinimi)
+- JWT tabanlı QR doğrulama
+
+## 📝 Lisans
+Fokus İstatistik © 2026
+
+## 🤝 Katkıda Bulunma
+Bu proje Fokus İstatistik için özel olarak geliştirilmiştir.
+
+---
+
+**Canlı URL:** https://doku.fokusistatistik.com
+**Port:** 3010
+**Branch:** feature/pwa-kiosk-update

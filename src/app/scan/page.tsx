@@ -113,8 +113,9 @@ export default function ScanPage() {
         const userName = localStorage.getItem("user_name") || "Unknown User";
         const deviceUuid = localStorage.getItem("device_owner_tc") || "unknown-device";
 
-        // Check if we're in development/mock mode
-        const useMockMode = process.env.NODE_ENV === "development" || !process.env.NEXT_PUBLIC_API_URL;
+        // Only use mock mode if API URL is not configured
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+        const useMockMode = !apiUrl;
 
         try {
             // Prepare Request Payload
@@ -143,13 +144,13 @@ export default function ScanPage() {
             }
 
             // REAL API CALL (Production Mode)
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL
-                ? `${process.env.NEXT_PUBLIC_API_URL}/api/mobile/scan`
+            const fullApiUrl = apiUrl
+                ? `${apiUrl}/api/mobile/scan`
                 : "https://api.fokusistatistik.com/api/mobile/scan";
 
-            console.log("📡 Sending Request to:", apiUrl);
+            console.log("📡 Sending Request to:", fullApiUrl);
 
-            const response = await fetch(apiUrl, {
+            const response = await fetch(fullApiUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
