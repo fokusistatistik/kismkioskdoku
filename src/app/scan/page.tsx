@@ -114,22 +114,28 @@ export default function ScanPage() {
         const deviceUuid = localStorage.getItem("device_owner_tc") || "unknown-device";
 
         try {
-            // Prepare Request Payload
+            // Prepare Request Payload - ENRICHED FOR FLEXIBILITY
             const payload = {
                 qr_token: scannedData.raw,
                 user_id: userId,
+                user_tc: localStorage.getItem("user_tc") || userId, // Explicit TC info
                 user_name: userName,
                 device_info: {
                     uuid: deviceUuid,
-                    user_agent: window.navigator.userAgent,
-                    platform: (window.navigator as any).userAgentData?.platform || window.navigator.platform,
+                    fingerprint: {
+                        ua: window.navigator.userAgent,
+                        platform: (window.navigator as any).userAgentData?.platform || window.navigator.platform,
+                        language: window.navigator.language,
+                        screen: `${window.screen.width}x${window.screen.height}`,
+                        vendor: window.navigator.vendor
+                    },
                     timestamp: new Date().toISOString()
                 }
             };
 
-            console.log("📡 Payload:", payload);
+            console.log("📡 Enriched Payload:", payload);
 
-            // REAL API CALL - NO MOCK MODE
+            // REAL API CALL
             const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
             if (!apiUrl) {
