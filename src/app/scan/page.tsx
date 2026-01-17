@@ -116,26 +116,25 @@ export default function ScanPage() {
         const deviceUuid = localStorage.getItem("device_owner_tc") || "unknown-device";
 
         try {
-            // Prepare Request Payload - ENRICHED FOR FLEXIBILITY
+            // Prepare Request Payload - V2 REQUIREMENTS
             const payload = {
                 qr_token: scannedData.raw,
-                user_id: userId,
-                user_tc: localStorage.getItem("user_tc") || userId, // Explicit TC info
+                user_tc: userId, // Assuming userId in localStorage is the TC
+                user_id: userId, // Fallback
                 user_name: userName,
                 device_info: {
                     uuid: deviceUuid,
+                    platform: (window.navigator as any).userAgentData?.platform || window.navigator.platform,
                     fingerprint: {
                         ua: window.navigator.userAgent,
-                        platform: (window.navigator as any).userAgentData?.platform || window.navigator.platform,
                         language: window.navigator.language,
                         screen: `${window.screen.width}x${window.screen.height}`,
-                        vendor: window.navigator.vendor
                     },
                     timestamp: new Date().toISOString()
                 }
             };
 
-            console.log("📡 Enriched Payload:", payload);
+            console.log("📡 V2 Payload:", payload);
 
             // REAL API CALL
             const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -144,8 +143,8 @@ export default function ScanPage() {
                 throw new Error("API URL yapılandırılmamış. Lütfen .env.local dosyasını kontrol edin.");
             }
 
-            const fullApiUrl = `${apiUrl}/api/mobile/scan`;
-            console.log("📡 Sending Request to:", fullApiUrl);
+            const fullApiUrl = `${apiUrl}/kiosk/api/mobile/scan`;
+            console.log("📡 Sending Request to V2:", fullApiUrl);
 
             const response = await fetch(fullApiUrl, {
                 method: "POST",
