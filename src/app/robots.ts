@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
             allow: '/',
             disallow: '/private/',
         },
-        sitemap: 'https://doku.fokusistatistik.com/sitemap.xml',
+        sitemap: 'https://kiosk.fokusistatistik.com/sitemap.xml',
     }
 }
