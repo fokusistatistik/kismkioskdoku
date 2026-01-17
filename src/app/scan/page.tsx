@@ -23,6 +23,8 @@ export default function ScanPage() {
     const [scannedData, setScannedData] = useState<{ raw: string; payload: JWTPayload } | null>(null);
     const [status, setStatus] = useState<"idle" | "confirm" | "loading" | "success" | "error">("idle");
     const [errorMessage, setErrorMessage] = useState("");
+    const [debugInfo, setDebugInfo] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState("Hoş Geldiniz!");
 
     const startScanner = useCallback(() => {
         // Prevent starting if already active or confirmation/loading
@@ -161,9 +163,12 @@ export default function ScanPage() {
                 case 200:
                     // ✅ ONLY show success if backend explicitly approved
                     if (data.success === true) {
+                        setDebugInfo(`SUCCESS: ${JSON.stringify(data)}`);
+                        setSuccessMessage(data.message || "Hoş Geldiniz!");
                         setStatus("success");
                         setTimeout(() => router.push("/dashboard"), 3000);
                     } else {
+                        setDebugInfo(`FAIL (200 but success false): ${JSON.stringify(data)}`);
                         throw new Error(data.message || "Backend onayı alınamadı");
                     }
                     break;
@@ -184,11 +189,14 @@ export default function ScanPage() {
                     break;
 
                 default:
+                    setDebugInfo(`ERROR (${response.status}): ${JSON.stringify(data)}`);
                     throw new Error(data.message || `Sunucu Hatası: ${response.status}`);
             }
 
         } catch (error: any) {
             console.error("❌ Access Error:", error);
+            const detail = error.message || "Bilinmeyen hata";
+            setDebugInfo(`EXCEPTION: ${detail}`);
 
             // NO FALLBACK - Show error to user
             if (error.name === "AbortError") {
@@ -324,7 +332,7 @@ export default function ScanPage() {
                                     <CheckCircle2 className="w-14 h-14 text-white" />
                                 </div>
                                 <h2 className="text-4xl font-bold text-white mb-2">Giriş Başarılı</h2>
-                                <p className="text-green-400 text-lg">Hoş Geldiniz!</p>
+                                <p className="text-green-400 text-lg">{successMessage}</p>
                                 <div className="mt-8 h-1 w-full bg-neutral-800 rounded-full overflow-hidden">
                                     <motion.div
                                         initial={{ width: 0 }}
@@ -351,6 +359,17 @@ export default function ScanPage() {
                                     Tekrar Dene
                                 </button>
                             </motion.div>
+                        )}
+
+                        {/* Debug Info Overlay */}
+                        {debugInfo && (
+                            <div className="absolute bottom-4 left-4 right-4 bg-black/80 border border-white/20 rounded-lg p-3 text-[10px] font-mono text-neutral-400 max-h-32 overflow-auto pointer-events-auto z-50">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-blue-400 font-bold uppercase">Debug Info:</span>
+                                    <button onClick={() => setDebugInfo(null)} className="text-white bg-white/10 px-2 py-0.5 rounded">Kapat</button>
+                                </div>
+                                {debugInfo}
+                            </div>
                         )}
                     </motion.div>
                 )}
