@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://kiosk.fokusistatistik.com"),
+  metadataBase: new URL("https://doku.fokusistatistik.com"),
   title: "DOKU",
   description: "Tesis Erişim Kontrol Sistemi",
   manifest: "/manifest.json",
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "DOKU",
     description: "Tesis Erişim Kontrol Sistemi",
-    url: "https://kiosk.fokusistatistik.com",
+    url: "https://doku.fokusistatistik.com",
     siteName: "DOKU",
     images: [
       {
