@@ -1,5 +1,5 @@
 "use client";
-import { io } from "socket.io-client";
+
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
@@ -134,31 +134,10 @@ export default function ScanPage() {
                 }
             };
 
-            const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://kiosk.fokusistatistik.com";
             console.log("📡 V2 Payload:", payload);
 
-            // --- CHANNEL 1: SOCKET.IO (Immediate Real-time) ---
-            try {
-                const socket = io(socketUrl, {
-                    path: "/kiosk/socket.io", // Ensure correct path for Kiosk backend
-                    transports: ["websocket"],
-                    reconnectionAttempts: 2
-                });
-
-                socket.on("connect", () => {
-                    console.log("✅ Socket Connected, Emitting mobile_scan...");
-                    socket.emit("mobile_scan", payload);
-                    // We don't wait for socket response to block UI, we treat API as source of truth
-                    // But this ensures Kiosk screen gets the signal even if API is slow
-                });
-
-                // Auto disconnect after a short while to save resources
-                setTimeout(() => socket.disconnect(), 5000);
-            } catch (socketErr) {
-                console.warn("⚠️ Socket emit failed (Non-fatal):", socketErr);
-            }
-
-            // --- CHANNEL 2: REST API (Source of Truth) ---
+            // --- SINGLE CHANNEL: REST API ---
+            // Mobile app sends data to ONE target. Backend handles the rest (including notifying the Kiosk screen via socket).
             const apiUrl = process.env.NEXT_PUBLIC_API_URL;
             if (!apiUrl) throw new Error("API URL yapılandırılmamış.");
 
