@@ -1,5 +1,5 @@
 "use client";
-
+import { io } from "socket.io-client";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
@@ -134,14 +134,33 @@ export default function ScanPage() {
                 }
             };
 
+            const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://kiosk.fokusistatistik.com";
             console.log("📡 V2 Payload:", payload);
 
-            // REAL API CALL
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+            // --- CHANNEL 1: SOCKET.IO (Immediate Real-time) ---
+            try {
+                const socket = io(socketUrl, {
+                    path: "/kiosk/socket.io", // Ensure correct path for Kiosk backend
+                    transports: ["websocket"],
+                    reconnectionAttempts: 2
+                });
 
-            if (!apiUrl) {
-                throw new Error("API URL yapılandırılmamış. Lütfen .env.local dosyasını kontrol edin.");
+                socket.on("connect", () => {
+                    console.log("✅ Socket Connected, Emitting mobile_scan...");
+                    socket.emit("mobile_scan", payload);
+                    // We don't wait for socket response to block UI, we treat API as source of truth
+                    // But this ensures Kiosk screen gets the signal even if API is slow
+                });
+
+                // Auto disconnect after a short while to save resources
+                setTimeout(() => socket.disconnect(), 5000);
+            } catch (socketErr) {
+                console.warn("⚠️ Socket emit failed (Non-fatal):", socketErr);
             }
+
+            // --- CHANNEL 2: REST API (Source of Truth) ---
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+            if (!apiUrl) throw new Error("API URL yapılandırılmamış.");
 
             const fullApiUrl = `${apiUrl}/kiosk/api/mobile/scan`;
             console.log("📡 Sending Request to V2:", fullApiUrl);
@@ -150,17 +169,15 @@ export default function ScanPage() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
-                signal: AbortSignal.timeout(10000) // 10 second timeout
+                signal: AbortSignal.timeout(10000)
             });
 
             console.log("📥 Response Status:", response.status);
-
             const data = await response.json().catch(() => ({}));
 
-            // Handle Specific HTTP Status Codes - STRICT VALIDATION
+            // Handle Specific HTTP Status Codes
             switch (response.status) {
                 case 200:
-                    // ✅ ONLY show success if backend explicitly approved
                     if (data.success === true) {
                         setDebugInfo(`SUCCESS: ${JSON.stringify(data)}`);
                         setSuccessMessage(data.message || "Hoş Geldiniz!");
@@ -171,22 +188,18 @@ export default function ScanPage() {
                         throw new Error(data.message || "Backend onayı alınamadı");
                     }
                     break;
-
                 case 404:
                     setErrorMessage("Kayıt Bulunamadı. Lütfen Danışmaya Başvurunuz.");
                     setStatus("error");
                     break;
-
                 case 403:
                     setErrorMessage(data.error || "Cihaz Eşleşmiyor veya Hesap Kilitli.");
                     setStatus("error");
                     break;
-
                 case 400:
                     setErrorMessage(data.error || "QR Zaman Aşımı, Lütfen Tekrar Okutun.");
                     setStatus("error");
                     break;
-
                 default:
                     setDebugInfo(`ERROR (${response.status}): ${JSON.stringify(data)}`);
                     throw new Error(data.message || `Sunucu Hatası: ${response.status}`);
@@ -197,7 +210,6 @@ export default function ScanPage() {
             const detail = error.message || "Bilinmeyen hata";
             setDebugInfo(`EXCEPTION: ${detail}`);
 
-            // NO FALLBACK - Show error to user
             if (error.name === "AbortError") {
                 setErrorMessage("Sunucu yanıt vermiyor (Zaman Aşımı). Lütfen tekrar deneyin.");
             } else if (error.message.includes("Failed to fetch")) {
