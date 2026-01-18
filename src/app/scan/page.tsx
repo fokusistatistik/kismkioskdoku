@@ -152,10 +152,8 @@ export default function ScanPage() {
             addLog(`📋 TC: ${userId}`);
             addLog(`📋 Cihaz: ${deviceUuid}`);
 
-            // 2. Determine URL
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-            if (!apiUrl) throw new Error("API URL Tanımsız (.env kontrol et)");
-            const fullApiUrl = `${apiUrl}/kiosk/api/mobile/scan`;
+            // 2. Determine URL - FIXED
+            const fullApiUrl = "https://kiosk.fokusistatistik.com/kiosk/api/mobile/scan";
 
             addLog(`🔗 Hedef: ${fullApiUrl}`);
             addLog("📡 Veri Sunucuya Gönderiliyor...");
