@@ -23,8 +23,14 @@ export default function ScanPage() {
     const [scannedData, setScannedData] = useState<{ raw: string; payload: JWTPayload } | null>(null);
     const [status, setStatus] = useState<"idle" | "confirm" | "loading" | "success" | "error">("idle");
     const [errorMessage, setErrorMessage] = useState("");
-    const [debugInfo, setDebugInfo] = useState<string | null>(null);
+    const [logs, setLogs] = useState<string[]>([]); // Network Logs
     const [successMessage, setSuccessMessage] = useState("Hoş Geldiniz!");
+
+    const addLog = (message: string) => {
+        const time = new Date().toLocaleTimeString().split(' ')[0];
+        setLogs(prev => [`[${time}] ${message}`, ...prev]);
+        console.log(`[${time}] ${message}`);
+    };
 
     const startScanner = useCallback(() => {
         // Prevent starting if already active or confirmation/loading
@@ -57,7 +63,7 @@ export default function ScanPage() {
             }
         ).catch(err => {
             console.error("Camera error", err);
-            setErrorMessage("Please enable camera permissions.");
+            setErrorMessage("Kamera izni gerekiyor.");
             setStatus("error");
         });
     }, [status, mounted]);
@@ -96,12 +102,12 @@ export default function ScanPage() {
 
             const decoded = jwtDecode<JWTPayload>(rawJwt);
             // Basic validation
-            if (!decoded.nam) throw new Error("Invalid QR Code Structure");
+            if (!decoded.nam) throw new Error("QR Formatı Hatalı");
 
             setScannedData({ raw: rawJwt, payload: decoded });
             setStatus("confirm");
         } catch (e) {
-            console.error("Invalid JWT", e);
+            addLog("❌ QR Okuma Hatası: Format geçersiz");
             // Optionally show toast 'Invalid QR', but for now assume good QR
             if (scannerRef.current) scannerRef.current.resume();
         }
@@ -110,17 +116,22 @@ export default function ScanPage() {
     const confirmAccess = async () => {
         if (!scannedData) return;
         setStatus("loading");
+        setLogs([]); // Clear logs on new attempt
+        addLog("🚀 İŞLEM BAŞLATILIYOR...");
 
         const userId = localStorage.getItem("user_id") || "unknown";
         const userName = localStorage.getItem("user_name") || "Unknown User";
         const deviceUuid = localStorage.getItem("device_owner_tc") || "unknown-device";
 
         try {
-            // Prepare Request Payload - V2 REQUIREMENTS
+            // 1. Prepare Payload
+            addLog("📦 Veri Paketi Hazırlanıyor...");
             const payload = {
-                qr_token: scannedData.raw,
-                user_tc: userId, // Assuming userId in localStorage is the TC
-                user_id: userId, // Fallback
+                qr_token: scannedData.raw.substring(0, 20) + "...", // Shorten for log
+                // Real token is sent, just shortened for UI log
+                full_qr_token: scannedData.raw,
+                user_tc: userId,
+                user_id: userId,
                 user_name: userName,
                 device_info: {
                     uuid: deviceUuid,
@@ -134,67 +145,79 @@ export default function ScanPage() {
                 }
             };
 
-            console.log("📡 V2 Payload:", payload);
+            // Fix payload structure for sending (remove logs fields)
+            const sendPayload = { ...payload, qr_token: scannedData.raw };
+            delete (sendPayload as any).full_qr_token;
 
-            // --- SINGLE CHANNEL: REST API ---
-            // Mobile app sends data to ONE target. Backend handles the rest (including notifying the Kiosk screen via socket).
+            addLog(`📋 TC: ${userId}`);
+            addLog(`📋 Cihaz: ${deviceUuid}`);
+
+            // 2. Determine URL
             const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-            if (!apiUrl) throw new Error("API URL yapılandırılmamış.");
-
+            if (!apiUrl) throw new Error("API URL Tanımsız (.env kontrol et)");
             const fullApiUrl = `${apiUrl}/kiosk/api/mobile/scan`;
-            console.log("📡 Sending Request to V2:", fullApiUrl);
 
+            addLog(`🔗 Hedef: ${fullApiUrl}`);
+            addLog("📡 Veri Sunucuya Gönderiliyor...");
+
+            // 3. Send Request
+            const startTime = Date.now();
             const response = await fetch(fullApiUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-                signal: AbortSignal.timeout(10000)
+                body: JSON.stringify(sendPayload),
+                signal: AbortSignal.timeout(15000) // 15 sec timeout
             });
+            const duration = Date.now() - startTime;
 
-            console.log("📥 Response Status:", response.status);
-            const data = await response.json().catch(() => ({}));
+            addLog(`📥 Cevap Geldi! Süre: ${duration}ms`);
+            addLog(`🔢 HTTP Durumu: ${response.status} ${response.statusText}`);
 
-            // Handle Specific HTTP Status Codes
-            switch (response.status) {
-                case 200:
-                    if (data.success === true) {
-                        setDebugInfo(`SUCCESS: ${JSON.stringify(data)}`);
-                        setSuccessMessage(data.message || "Hoş Geldiniz!");
-                        setStatus("success");
-                        setTimeout(() => router.push("/dashboard"), 3000);
-                    } else {
-                        setDebugInfo(`FAIL (200 but success false): ${JSON.stringify(data)}`);
-                        throw new Error(data.message || "Backend onayı alınamadı");
-                    }
-                    break;
-                case 404:
-                    setErrorMessage("Kayıt Bulunamadı. Lütfen Danışmaya Başvurunuz.");
-                    setStatus("error");
-                    break;
-                case 403:
-                    setErrorMessage(data.error || "Cihaz Eşleşmiyor veya Hesap Kilitli.");
-                    setStatus("error");
-                    break;
-                case 400:
-                    setErrorMessage(data.error || "QR Zaman Aşımı, Lütfen Tekrar Okutun.");
-                    setStatus("error");
-                    break;
-                default:
-                    setDebugInfo(`ERROR (${response.status}): ${JSON.stringify(data)}`);
-                    throw new Error(data.message || `Sunucu Hatası: ${response.status}`);
+            // 4. Parse Response
+            const textBody = await response.text();
+            addLog(`📄 Ham Cevap: ${textBody.substring(0, 100)}${textBody.length > 100 ? '...' : ''}`);
+
+            let data: any = {};
+            try {
+                data = JSON.parse(textBody);
+            } catch (jsonErr) {
+                addLog("⚠️ JSON Parse Hatası! Cevap JSON formatında değil.");
+            }
+
+            // 5. Handle Logic
+            if (response.status === 200) {
+                if (data.success === true) {
+                    addLog("✅ BAŞARILI: Backend onayı verdi.");
+                    addLog(`💬 Mesaj: ${data.message}`);
+                    setSuccessMessage(data.message || "Giriş Başarılı");
+                    setStatus("success");
+                    setTimeout(() => router.push("/dashboard"), 3000);
+                } else {
+                    addLog("❌ REDDEDİLDİ: HTTP 200 ama success:false");
+                    addLog(`💬 Hata: ${data.message}`);
+                    throw new Error(data.message || "Backend onayı reddetti");
+                }
+            } else {
+                addLog(`⛔ HATA: Sunucu ${response.status} döndü.`);
+                let errMsg = "Sunucu Hatası";
+                if (response.status === 404) errMsg = "Kayıt Bulunamadı";
+                if (response.status === 403) errMsg = "Erişim Engellendi (403)";
+
+                setErrorMessage(data.message || data.error || errMsg);
+                throw new Error(data.message || errMsg);
             }
 
         } catch (error: any) {
-            console.error("❌ Access Error:", error);
-            const detail = error.message || "Bilinmeyen hata";
-            setDebugInfo(`EXCEPTION: ${detail}`);
+            console.error(error);
+            addLog(`💥 İSTİSNA: ${error.name}`);
+            addLog(`📝 Detay: ${error.message}`);
 
             if (error.name === "AbortError") {
-                setErrorMessage("Sunucu yanıt vermiyor (Zaman Aşımı). Lütfen tekrar deneyin.");
-            } else if (error.message.includes("Failed to fetch")) {
-                setErrorMessage("Backend'e bağlanılamıyor. Lütfen API URL'ini kontrol edin.");
+                setErrorMessage("Zaman Aşımı: Sunucu 15sn içinde cevap vermedi.");
+            } else if (error.message.includes("Failed to fetch") || error.message.includes("Load failed")) {
+                setErrorMessage("Bağlantı Hatası: Sunucuya ulaşılamadı. İnterneti kontrol edin.");
             } else {
-                setErrorMessage(error.message || "Bağlantı hatası. Lütfen sistem yöneticisi ile iletişime geçin.");
+                setErrorMessage(error.message || "Bilinmeyen İletişim Hatası");
             }
             setStatus("error");
         }
@@ -204,15 +227,10 @@ export default function ScanPage() {
         setScannedData(null);
         setErrorMessage("");
         setStatus("idle");
-        // Resume scanner if paused
+        // Don't clear logs immediately so user can read them
         if (scannerRef.current) {
-            try {
-                scannerRef.current.resume();
-            } catch (e) {
-                // If failed to resume (maybe stopped?), force restart via effect
-                setMounted(false);
-                setTimeout(() => setMounted(true), 10);
-            }
+            try { scannerRef.current.resume(); }
+            catch (e) { setMounted(false); setTimeout(() => setMounted(true), 10); }
         }
     };
 
@@ -223,7 +241,9 @@ export default function ScanPage() {
                 <button onClick={() => router.back()} className="text-white bg-white/10 p-3 rounded-full backdrop-blur-md active:bg-white/20 transition-colors">
                     <ArrowLeft size={24} />
                 </button>
-                <span className="text-white bg-black/50 px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase border border-white/10 backdrop-blur-md">QR TARA</span>
+                <div className="flex flex-col items-center">
+                    <span className="text-white bg-black/50 px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase border border-white/10 backdrop-blur-md">QR TARA</span>
+                </div>
                 <div className="w-12" />
             </div>
 
@@ -232,15 +252,10 @@ export default function ScanPage() {
                 {mounted && <div id="reader" className="w-[100vw] h-[100vh] object-cover" />}
             </div>
 
-            {/* Scan Overlay UI (Visual only) */}
+            {/* Scan Overlay UI */}
             {status === "idle" && (
                 <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-0">
                     <div className="w-72 h-72 border-2 border-blue-500/50 rounded-3xl relative opacity-80 backdrop-blur-[1px]">
-                        <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-400 rounded-tl-xl -mt-0.5 -ml-0.5" />
-                        <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-400 rounded-tr-xl -mt-0.5 -mr-0.5" />
-                        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-400 rounded-bl-xl -mb-0.5 -ml-0.5" />
-                        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-400 rounded-br-xl -mb-0.5 -mr-0.5" />
-
                         <motion.div
                             initial={{ top: "10%" }}
                             animate={{ top: ["10%", "90%", "10%"] }}
@@ -249,7 +264,7 @@ export default function ScanPage() {
                         />
                     </div>
                     <p className="mt-8 text-neutral-300 text-sm font-medium bg-black/60 px-6 py-2 rounded-full backdrop-blur-md border border-white/10">
-                        Barkodu çerçevenin içine hizalayın
+                        Barkodu hizalayın
                     </p>
                 </div>
             )}
@@ -265,10 +280,6 @@ export default function ScanPage() {
                         className="absolute bottom-0 left-0 right-0 bg-neutral-900 rounded-t-3xl p-8 z-20 border-t border-white/10 shadow-2xl pb-10"
                     >
                         <div className="w-16 h-1.5 bg-neutral-700/50 rounded-full mx-auto mb-8" />
-
-                        <div className="absolute top-4 right-4 bg-green-500/20 text-green-400 text-xs font-bold px-3 py-1 rounded-full animate-pulse border border-green-500/30">
-                            ✓ QR Okundu
-                        </div>
 
                         <div className="mb-8">
                             <h3 className="text-sm text-neutral-400 font-medium uppercase tracking-wider mb-2">Giriş Yapılacak Nokta:</h3>
@@ -289,77 +300,60 @@ export default function ScanPage() {
                 )}
             </AnimatePresence>
 
-            {/* Loading/Success/Error Overlay */}
+            {/* STATUS & LOGS OVERLAY */}
             <AnimatePresence>
-                {status !== "idle" && status !== "confirm" && (
+                {(status === "loading" || status === "success" || status === "error") && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className={cn(
-                            "absolute inset-0 z-30 flex flex-col items-center justify-center p-6 bg-black/90 backdrop-blur-xl",
-                            status === "success" && "bg-green-950/30",
-                            status === "error" && "bg-red-950/30"
+                            "absolute inset-0 z-30 flex flex-col bg-black/95 backdrop-blur-xl pt-20 pb-8 px-6",
+                            status === "success" && "bg-green-950/90",
+                            status === "error" && "bg-red-950/90"
                         )}
                     >
-                        {status === "loading" && (
-                            <div className="flex flex-col items-center">
-                                <div className="relative w-20 h-20 mb-6">
-                                    <div className="absolute inset-0 border-4 border-neutral-800 rounded-full" />
-                                    <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                                </div>
-                                <p className="text-white font-medium animate-pulse text-lg">Doğrulanıyor...</p>
-                            </div>
-                        )}
+                        {/* Status Icon Area */}
+                        <div className="flex-shrink-0 flex flex-col items-center justify-center mb-6">
+                            {status === "loading" && <Loader2 className="w-16 h-16 text-blue-500 animate-spin mb-4" />}
+                            {status === "success" && <CheckCircle2 className="w-16 h-16 text-green-500 mb-4" />}
+                            {status === "error" && <XCircle className="w-16 h-16 text-red-500 mb-4" />}
 
-                        {status === "success" && (
-                            <motion.div
-                                initial={{ scale: 0.8, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                className="text-center w-full max-w-sm"
-                            >
-                                <div className="w-28 h-28 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-[0_0_60px_-10px_rgba(34,197,94,0.6)]">
-                                    <CheckCircle2 className="w-14 h-14 text-white" />
-                                </div>
-                                <h2 className="text-4xl font-bold text-white mb-2">Giriş Başarılı</h2>
-                                <p className="text-green-400 text-lg">{successMessage}</p>
-                                <div className="mt-8 h-1 w-full bg-neutral-800 rounded-full overflow-hidden">
-                                    <motion.div
-                                        initial={{ width: 0 }}
-                                        animate={{ width: "100%" }}
-                                        transition={{ duration: 2.5 }}
-                                        className="h-full bg-green-500"
-                                    />
-                                </div>
-                            </motion.div>
-                        )}
+                            <h2 className="text-2xl font-bold text-white text-center">
+                                {status === "loading" && "Sunucu ile İletişim..."}
+                                {status === "success" && "Giriş Başarılı"}
+                                {status === "error" && "Bağlantı Sorunu"}
+                            </h2>
+                            {errorMessage && <p className="text-red-300 text-center mt-2 text-sm">{errorMessage}</p>}
+                            {status === "success" && <p className="text-green-300 text-center mt-2">{successMessage}</p>}
+                        </div>
+
+                        {/* LIVE LOG TERMINAL */}
+                        <div className="flex-1 bg-black/50 rounded-xl border border-white/10 overflow-hidden flex flex-col font-mono text-[10px] md:text-xs">
+                            <div className="bg-white/10 px-4 py-2 flex justify-between items-center">
+                                <span className="text-blue-300 font-bold">CANLI BAĞLANTI LOGLARI</span>
+                                {status === "error" && <button onClick={resetScan} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-white">KAPAT</button>}
+                            </div>
+                            <div className="flex-1 p-4 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-white/20">
+                                {logs.length === 0 && <span className="text-neutral-500 italic">...Log bekleniyor...</span>}
+                                {logs.map((log, i) => (
+                                    <div key={i} className={cn(
+                                        "break-all border-l-2 pl-2",
+                                        log.includes("✅") ? "text-green-400 border-green-500" :
+                                            log.includes("❌") || log.includes("⛔") || log.includes("💥") ? "text-red-400 border-red-500" :
+                                                log.includes("🚀") || log.includes("📡") ? "text-blue-400 border-blue-500" :
+                                                    "text-neutral-400 border-neutral-700"
+                                    )}>
+                                        {log}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
 
                         {status === "error" && (
-                            <motion.div
-                                initial={{ scale: 0.8, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                className="text-center w-full max-w-sm"
-                            >
-                                <div className="w-28 h-28 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-[0_0_60px_-10px_rgba(239,68,68,0.6)]">
-                                    <XCircle className="w-14 h-14 text-white" />
-                                </div>
-                                <h2 className="text-3xl font-bold text-white mb-2">Erişim Reddedildi</h2>
-                                <p className="text-red-300 mb-10 text-lg px-4">{errorMessage}</p>
-                                <button onClick={resetScan} className="w-full py-4 bg-white/10 rounded-2xl text-white font-bold hover:bg-white/20 transition-colors border border-white/10">
-                                    Tekrar Dene
-                                </button>
-                            </motion.div>
-                        )}
-
-                        {/* Debug Info Overlay */}
-                        {debugInfo && (
-                            <div className="absolute bottom-4 left-4 right-4 bg-black/80 border border-white/20 rounded-lg p-3 text-[10px] font-mono text-neutral-400 max-h-32 overflow-auto pointer-events-auto z-50">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="text-blue-400 font-bold uppercase">Debug Info:</span>
-                                    <button onClick={() => setDebugInfo(null)} className="text-white bg-white/10 px-2 py-0.5 rounded">Kapat</button>
-                                </div>
-                                {debugInfo}
-                            </div>
+                            <button onClick={resetScan} className="mt-4 w-full py-4 bg-white/10 rounded-xl text-white font-bold hover:bg-white/20 border border-white/10">
+                                Tekrar Dene
+                            </button>
                         )}
                     </motion.div>
                 )}
